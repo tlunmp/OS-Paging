@@ -12,7 +12,12 @@ int messageQueueId;
 int shmid; 
 SharedMemory* shmPtr;
 Clock launchTime;
+
 void helpMenu();
+void initializeFrameTable();
+void initializeProcessTable();
+int returnPageAddress();
+
 
 
 int main(int argc, char* argv[]) {
@@ -30,6 +35,7 @@ int main(int argc, char* argv[]) {
 
 
 	int ptr_count = 0;
+	
 	//getopt command for command line
 	while((c = getopt (argc,argv, "hv:n:")) != -1) {
 
@@ -47,9 +53,7 @@ int main(int argc, char* argv[]) {
 				return -1;	
 		}
 
-
 	}
-
 
 
 	//sigalarm error
@@ -87,9 +91,14 @@ int main(int argc, char* argv[]) {
  	time_t t;
 	srand((unsigned) time(&t));
 
+	initializeFrameTable();
+	
+	initializeProcessTable();
+
 
 	//alarm
 	alarm(timer);
+/*	
 	while(totalCount < maxChildProcess || ptr_count > 0){ 					
 			
 			shmPtr->clockInfo.nanoSeconds += 20000;
@@ -148,8 +157,41 @@ int main(int argc, char* argv[]) {
 		}
 
  	 //kill(0, SIGTERM);
-	return 0;
+*/	return 0;
 }
+
+void displayTable(){
+
+}
+
+int returnPageAddress() {
+	int pageAddress = rand() % (32000 + 0 - 0) + 0;
+	return pageAddress;
+}
+
+
+void initializeFrameTable(){
+	int i;
+	for(i = 0; i < 256; i++) {
+		frameTable[i].occupied = 0;	
+		frameTable[i].referenceBit = 0;	
+		frameTable[i].dirtyBit = 0;	
+		//printf("frame table %d: occupied: %d, referenceBit %d, dirtyBit %d\n", i, frameTable[i].occupied, frameTable[i].referenceBit,frameTable[i].dirtyBit);
+	}
+}
+
+void initializeProcessTable() {
+	int i,j;
+	for(i=0; i < 18; i++) {
+		for(j=0; j < 32; j++){
+			process[i].pageTable[j].present = 0;
+			printf("process %d, pagetable %d : PresentBit = %d\n",i,j,process[i].pageTable[j].present);
+		}
+	}
+
+
+}
+
 
 //help meny
 void helpMenu() {
