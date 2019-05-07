@@ -16,9 +16,12 @@ Clock launchTime;
 void helpMenu();
 void initializeFrameTable();
 void initializeProcessTable();
-int returnPageAddress();
-
-
+int randomizePageAddress();
+int returnPageAddress(int randomPageAddress);
+void setPagePresentOn(int fakePid, int pageAddress);
+void setPagePresentOff(int fakePid, int pageAddress);
+void inputPageToFrame(int fakePid, int pageAddress, char *operation);
+void shiftingBits(int shifting);
 
 int main(int argc, char* argv[]) {
 	int totalCount = 0,
@@ -29,10 +32,10 @@ int main(int argc, char* argv[]) {
 
 	int c;
 	char verbose[100], 
-	     errorMessage[bufSize];
+	     errorMessage[bufSize],
+	     charMessage[bufSize];
 
 	Message message;
-
 
 	int ptr_count = 0;
 	
@@ -94,7 +97,19 @@ int main(int argc, char* argv[]) {
 	initializeFrameTable();
 	
 	initializeProcessTable();
+		
+	int pageAddress = returnPageAddress(randomizePageAddress());
+	
+	printf("somethin %d\n", pageAddress);
+	
+	setPagePresentOn(fakePid, pageAddress);	
 
+	printf("process %d, pagetable %d, presentBit : %d\n", fakePid, pageAddress, process[fakePid].pageTable[pageAddress].present);	
+	
+	strcpy(charMessage,"WRITE");
+	
+	
+	inputPageToFrame(pageAddress, charMessage);
 
 	//alarm
 	alarm(timer);
@@ -157,16 +172,96 @@ int main(int argc, char* argv[]) {
 		}
 
  	 //kill(0, SIGTERM);
-*/	return 0;
+*/	
+
+	 shmdt(shmPtr); //detaches a section of shared memory
+    	shmctl(shmid, IPC_RMID, NULL);  // deallocate the memory
+	msgctl(messageQueueId, IPC_RMID, NULL); 
+
+	return 0;
 }
 
 void displayTable(){
 
 }
 
-int returnPageAddress() {
-	int pageAddress = rand() % (32000 + 0 - 0) + 0;
+void storingPage(){
+	
+
+
+
+}
+
+
+//shifting bits whenever read/write hit 200
+void shiftingBits(int shifting){
+	int i;
+	if(shifting == 200) {
+		for(i=0; i < 256;i++){
+			frameTable[i].referenceBit >>= 1;
+			printf("shifted number is %d\n", frameTable[i].referenceBit);
+		}
+	}
+
+}
+
+void inputPageToFrame(int fakePid, int pageAddress, char *operation){
+	int i, allOccupied, shifting;
+
+	printf("%s\n",operation);
+	for(i=0; i < 256; i++){
+		if(frameTable[i].occupied == 0){
+			if(strcmp(operation,"WRITE") == 0){
+				frameTable[i].dirtyBit = 0;
+				frameTable[i].referenceBit |= (1<<7);
+				frameTable[i].pageNo = pageAddress;
+				printf("pageAddress is %d, reference bit %d, dirty bit %d\n", frameTable[i].pageNo, frameTable[i].referenceBit, frameTable[i].dirtyBit);	
+				allOccupied++;
+				shifting++;
+				break;
+			} else {
+				frameTable[i].referenceBit |= (1<<7);
+				allOccupied++;
+				break;
+			}		
+		} 
+	}
+
+	shifting = 200;
+
+	shiftingBits(shifting);
+	//if everything is occupied then use the reference bit to swap
+	if(allOccupied == 256){
+
+
+
+
+	}
+}
+
+
+//setting the pagetable present on
+void setPagePresentOn(int fakePid, int pageAddress){
+	process[fakePid].pageTable[pageAddress].present = 1;
+}
+
+//setting the pagetable present off
+void setPagePresentOff(int fakePid, int pageAddress){
+	process[fakePid].pageTable[pageAddress].present = 0;
+}
+
+//return page address
+int returnPageAddress(int randomPageAddress) {
+	int pageAddress = randomPageAddress / 1024;
 	return pageAddress;
+} 
+
+
+//randomize from 0 - 32000
+int randomizePageAddress() {
+	int randomAddress = rand() % (32000 + 0 - 0) + 0;	
+	printf("%d\n",randomAddress);
+	return randomAddress;
 }
 
 
@@ -185,7 +280,7 @@ void initializeProcessTable() {
 	for(i=0; i < 18; i++) {
 		for(j=0; j < 32; j++){
 			process[i].pageTable[j].present = 0;
-			printf("process %d, pagetable %d : PresentBit = %d\n",i,j,process[i].pageTable[j].present);
+			//printf("process %d, pagetable %d : PresentBit = %d\n",i,j,process[i].pageTable[j].present);
 		}
 	}
 
