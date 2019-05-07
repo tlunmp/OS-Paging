@@ -29,12 +29,14 @@ int  randomInterval();
 void generateInterval(int addInterval);
 void generateLaunch(int addInterval);
 
+void displayTable();
+
 int main(int argc, char* argv[]) {
 	int totalCount = 0,
 	    requestNumbers = 0,
 	    bufSize = 200,
 	    timer = 5,
-	    maxChildProcess = 1;
+	    maxChildProcess = 2;
 
 	int c;
 	char verbose[100], 
@@ -103,7 +105,15 @@ int main(int argc, char* argv[]) {
 	initializeFrameTable();
 	
 	initializeProcessTable();
-		
+
+
+
+	generateLaunch(randomInterval());
+
+	printf("launch time %d:%d",launchTime.seconds, launchTime.nanoSeconds);
+	printf("max %d\n", maxChildProcess);
+
+/*		
 	int randomPA = randomizePageAddress();
 	int pageAddress = returnPageAddress(randomPA);
 	
@@ -118,11 +128,15 @@ int main(int argc, char* argv[]) {
 	//frameTable[0].occupied = 1;	
 
 	inputPageToFrame(isPresent, fakePid, pageAddress, charMessage, randomizePageAddress);
-
+*/
 
 	//alarm
 	alarm(timer);
-/*	
+
+
+	displayTable();
+
+	fakePid = 0;
 	while(totalCount < maxChildProcess || ptr_count > 0){ 					
 			
 			shmPtr->clockInfo.nanoSeconds += 20000;
@@ -132,14 +146,20 @@ int main(int argc, char* argv[]) {
 				shmPtr->clockInfo.nanoSeconds -= 1000000000;
 			}				
 		
-		
+			
 			if(waitpid(childpid,NULL, WNOHANG)> 0){
 				ptr_count--;
 			}
 
 
 			if(ptr_count < 18 && shmPtr->clockInfo.seconds == launchTime.seconds && shmPtr->clockInfo.nanoSeconds > launchTime.nanoSeconds){	
-					
+				
+						int randomPA = randomizePageAddress();
+						int pageAddress = returnPageAddress(randomPA);
+				
+						printf("process%d, pageaddress %d\n", fakePid, pageAddress);
+
+	
 						message.myType = 1;
 						char buffer1[100];
 						sprintf(buffer1, "%d", fakePid);
@@ -174,14 +194,15 @@ int main(int argc, char* argv[]) {
 
 						}	
 						
-						fprintf(stderr, "%d\n",totalCount);
-						//fprintf(stderr,"%s\n",message.mtext);
-						exit(0);
+						fprintf(stderr,"%s\n",message.mtext);
+			
+						fakePid++;
+						generateLaunch(randomInterval());	
 			}
+			
 		}
 
- 	 //kill(0, SIGTERM);
-*/	
+ 	 //kill(0, SIGTERM);	
 
 	 shmdt(shmPtr); //detaches a section of shared memory
     	shmctl(shmid, IPC_RMID, NULL);  // deallocate the memory
@@ -191,6 +212,26 @@ int main(int argc, char* argv[]) {
 }
 
 void displayTable(){
+	fprintf(stderr, "---------------------------------------------\n");
+	fprintf(stderr, "|           | Occupied | RefByte | DirtyBit |\n");		
+	fprintf(stderr, "---------------------------------------------\n");
+	
+	int i;
+	for(i = 0; i < 256; i++){
+		fprintf(stderr, "| Frame %3d |",i);
+		
+		if(frameTable[i].occupied == 0){
+			fprintf(stderr, "    No    |");
+		} else {
+			fprintf(stderr, "   Yes    |");
+		}
+
+		fprintf(stderr,"  %3d    |",frameTable[i].referenceBit);	
+		fprintf(stderr,"    %d     |",frameTable[i].dirtyBit);
+		fprintf(stderr, "\n");
+	}
+
+	fprintf(stderr, "---------------------------------------------\n");
 
 }
 
