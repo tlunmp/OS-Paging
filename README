@@ -1,0 +1,55 @@
+Ted Anthony L Uy
+CS4760
+Project 6
+
+This project spawn one fork = one process = 32 randomize page table. 
+
+How page address is generated
+- randomized from 0 -32k
+- then dividing it with 1024
+
+How memory addres is generated
+- get the randomize page address which is 0-32k
+- make a offset using the randomize page address % 1024
+- then add the frame number + the offset
+
+How this project works
+
+1. When pag address is generated randomly it looks for the page then set the present bit to 1 (since the page is present)
+2. Filling the frame table, we look for the first occupied on the frame table, then store it.
+3. Page table request memory from user process by telling if it is write/read. 
+	if pagefault or present is occuppied
+		if it is write:
+			dirtybit = 1, 
+			insert fake pid, 
+			page address, 
+			set the refbit to 128 (everytime it is write we move the left bit)
+		if it is read:
+			leave the dirtybit
+			insert fake pid,
+			page address
+			set the refbit to 128 (everytime it is write we move the left bit)
+		write/read process is being recorded.
+	if not pagefault or present is not occupied
+		we just change the refbit and dirtybit if it is write
+	if the recorded counter reach 200.
+		we move to the right bit using >>=1 every 200 request on all the referencebit on the pagetable that is occupied
+
+4. if all the pagetable is occupied, we used the least used refbits to know where the frame table is
+	same as number 3 as follows. 
+
+5. when user process terminate it clear the pagetable presentbit, frame table dirtybit, occupied, fakepid, pagenumber
+
+
+SYNTAX
+-h  			help menu
+
+-n			max processor
+
+
+make			builds and creates exectuable 'p1'
+make clean		cleans object files and executables
+
+
+on the statistic i dont know if i am write, since i am really not that good in math. tried the best I can and the clock too. but the paging is working correctly as I explain it to you you said its right.
+thank you for a great class, and for helping me a lot, sorry i was annoying, but I really want to pass this class, since I am graduating this term, I always try my best sir. 
