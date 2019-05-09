@@ -15,6 +15,8 @@ SharedMemory* shmPtr;
 Clock launchTime;
 int memoryCount=0;
 int memoryAddress = 0;
+int nonTerminated[18];
+int terminatedNumber = 0;
 
 void helpMenu();
 void initializeFrameTable();
@@ -41,7 +43,9 @@ int main(int argc, char* argv[]) {
 	    requestNumbers = 0,
 	    bufSize = 200,
 	    timer = 5,
-	    maxChildProcess = 1;
+	    maxChildProcess = 100,
+	    l,
+	    num = 0;
 
 	int c;
 	char verbose[100], 
@@ -139,7 +143,10 @@ int main(int argc, char* argv[]) {
 
 	//alarm
 	//alarm(timer);
-			
+	int o;
+	for(o=0; o<18; o++){
+		nonTerminated[o] = o;
+	}	
 
 	while(totalCount < maxChildProcess || ptr_count > 0){ 					
 			
@@ -158,7 +165,47 @@ int main(int argc, char* argv[]) {
 
 			if(ptr_count < 18 && shmPtr->clockInfo.seconds == launchTime.seconds && shmPtr->clockInfo.nanoSeconds > launchTime.nanoSeconds){	
 						
-				
+			
+							
+						for(l=0; l<18;l++){
+							if(nonTerminated[l] == -1){
+								terminatedNumber++;					
+							} 
+						}
+					
+						if(nonTerminated[num] != -1){
+							fakePid = nonTerminated[num];
+						} else {	
+							
+							int s = num;
+							for(s=num; s<18;s++){
+								if(nonTerminated[s] == -1){
+									num++;
+								} else {
+									break;
+								}
+
+							}
+							
+							fakePid = nonTerminated[num];
+
+							//printf("fakeid is %d",fakePid);
+						
+						}
+
+						//if all terminate it just terminate the program or reset it	
+						if(terminatedNumber == 18){					
+							fprintf(stderr,"All Process are Terminated.\n");
+  	 						
+							 shmdt(shmPtr); //detaches a section of shared memory
+  						  	shmctl(shmid, IPC_RMID, NULL);  // deallocate the memory
+							msgctl(messageQueueId, IPC_RMID, NULL); 
+ 							return 0;
+						//kill(0, SIGTERM);
+						} else {
+							terminatedNumber = 0;
+						}
+	
 						message.myType = 1;
 						char buffer1[100];
 						sprintf(buffer1, "%d", fakePid);
@@ -171,7 +218,7 @@ int main(int argc, char* argv[]) {
 
 	
 						// char buffer1[100];
-				// sprintf(buffer1, "%d", totalCount);
+						// sprintf(buffer1, "%d", totalCount);
 						childpid=fork();
 
 						totalCount++;
@@ -188,6 +235,10 @@ int main(int argc, char* argv[]) {
 			
 						}
 						
+
+
+
+					
 						int m;
 						for(m = 2; m <34;m++){	
 							if (msgrcv(messageQueueId, &message,sizeof(message)+1,m,0) == -1) {
@@ -195,22 +246,50 @@ int main(int argc, char* argv[]) {
 
 							}	
 						//	printf(" operation %s\n", message.mtext);
-							
+						
+												
 							int randomPA = randomizePageAddress();
 							int pageAddress = returnPageAddress(randomPA);
-								
+							generateLaunch(15000000);								
 						//	printf("pageaddress %d\n",pageAddress);		
 							int isPresent = setPagePresent(fakePid, pageAddress);	
-							inputPageToFrame(isPresent, fakePid, pageAddress, message.mtext, randomizePageAddress);
-						}
-		
-						if(fakePid < 17){
-							fakePid++;
-						} else {
+					
 
-							fakePid = 0; 
+							if(strcmp(message.mtext, "Terminated") == 0 ){
+								fprintf(stderr,"Master: Terminating P%d at %d:%d\n\n",fakePid, shmPtr->clockInfo.seconds,shmPtr->clockInfo.nanoSeconds);
+								
+								nonTerminated[fakePid] = -1;
+								int u;
+								for(u=0; u <32; u++){
+									process[fakePid].pageTable[u].present = 0;
+									frameTable[process[fakePid].pageTable[u].frameNo].occupied = 0;	
+									frameTable[process[fakePid].pageTable[u].frameNo].referenceBit = 0;	
+									frameTable[process[fakePid].pageTable[u].frameNo].dirtyBit = 0;	
+								}
+								
+							} 
+
+							inputPageToFrame(isPresent, fakePid, pageAddress, message.mtext, randomizePageAddress);
+							
+							memoryCount++;
+							if(memoryCount == 100){
+								displayFrameTable();
+								memoryCount = 0;
+							}	
+							
+
 						}
-						generateLaunch(randomInterval());	
+
+
+				
+						if(num < 17){			
+							num++;	
+						} else {
+						
+							num = 0;		
+						}	
+	
+					generateLaunch(randomInterval());	
 			
 			}
 			
@@ -280,8 +359,8 @@ void displayFrameTable(){
 
 		fprintf(stderr,"  %3d    |",frameTable[i].referenceBit);	
 		fprintf(stderr,"    %d     |",frameTable[i].dirtyBit);
-		fprintf(stderr,"    %d     |",frameTable[i].pageNo);
-		fprintf(stderr,"    %d     |",frameTable[i].fakePid);
+	//	fprintf(stderr,"    %d     |",frameTable[i].pageNo);
+	//	fprintf(stderr,"    %d     |",frameTable[i].fakePid);
 		fprintf(stderr, "\n");
 	}
 
@@ -316,8 +395,7 @@ void inputPageToFrame(int isPresent, int fakePid, int pageAddress, char *operati
 	int i;
 
 	//printf("is present %d, operation %s\n",isPresent, operation);
-	
-	
+
 
 	if(frameTable[255].occupied == 0){	
 
@@ -328,13 +406,19 @@ void inputPageToFrame(int isPresent, int fakePid, int pageAddress, char *operati
 					if(strcmp(operation, "WRITE") == 0){
 						frameTable[i].occupied = 1;
 						frameTable[i].dirtyBit = 1;
+						
+						generateLaunch(1500);
+						fprintf(stderr,"Master: Dirty bit of frame %d set, adding additional time to the clock\n",i);
+						generateInterval(150000);
 						frameTable[i].referenceBit |= (1<<7);
 						frameTable[i].fakePid = fakePid;
 						frameTable[i].pageNo = pageAddress;
 						process[fakePid].pageTable[pageAddress].frameNo = i;
 						memoryAddress = createMemoryAddress(fakePid, pageAddress,randomizePageAddress);
-						generateInterval(15000000);
 						fprintf(stderr,"Master: P%d is requesting write of the address %d at time %d:%d\n",fakePid, memoryAddress,shmPtr->clockInfo.seconds, shmPtr->clockInfo.nanoSeconds);
+						generateInterval(15000);
+						fprintf(stderr,"Master: Address %d in frame %d writing  data to frame at time %d:%d\n", memoryAddress, i, shmPtr->clockInfo.seconds, shmPtr->clockInfo.nanoSeconds);
+						fprintf(stderr,"Master: Address %d is not in a frame, pagefault\n",memoryAddress);
 						shifting++;
 					} else {
 						frameTable[i].occupied = 1;
@@ -342,10 +426,16 @@ void inputPageToFrame(int isPresent, int fakePid, int pageAddress, char *operati
 						frameTable[i].referenceBit |= (1<<7);
 						frameTable[i].pageNo = pageAddress;	
 						process[fakePid].pageTable[pageAddress].frameNo = i;
+						printf("\n frame address %d\n", process[fakePid].pageTable[pageAddress].frameNo);
 						memoryAddress = createMemoryAddress(fakePid, pageAddress,randomizePageAddress);
+						generateLaunch(15000000);
 						generateInterval(15000000);
 						fprintf(stderr,"Master: P%d is requesting read of the address %d at time %d:%d\n",fakePid, memoryAddress,shmPtr->clockInfo.seconds, shmPtr->clockInfo.nanoSeconds);
-		shifting++;
+						generateInterval(15000);
+						fprintf(stderr,"Master: Address %d in frame %d giving data to P%d at time %d:%d\n", memoryAddress, i, fakePid, shmPtr->clockInfo.seconds, shmPtr->clockInfo.nanoSeconds);
+						fprintf(stderr,"Master: Address %d is not in a frame, pagefault\n",memoryAddress);
+
+						shifting++;
 					}
 					break;
 				}
@@ -353,16 +443,23 @@ void inputPageToFrame(int isPresent, int fakePid, int pageAddress, char *operati
 		//if pagetable is occupid or present
 		} else {
 			if(strcmp(operation, "WRITE") == 0){
+				generateLaunch(20000000);
 				memoryAddress = createMemoryAddress(fakePid, pageAddress,randomizePageAddress);
-				generateInterval(15000000);
-				fprintf(stderr,"Master: P%d is requestint write of the address %d at time %d:%d\n",fakePid, memoryAddress,shmPtr->clockInfo.seconds, shmPtr->clockInfo.nanoSeconds);
+				generateInterval(1500000);
+				fprintf(stderr,"Master: P%d is requesting write of the address %d at time %d:%d\n",fakePid, memoryAddress,shmPtr->clockInfo.seconds, shmPtr->clockInfo.nanoSeconds);
+				generateInterval(15000);
+				fprintf(stderr,"Master: P%d is updating dirtybit and referenceBit on frame %d\n",fakePid, process[fakePid].pageTable[pageAddress].frameNo);
 				frameTable[process[fakePid].pageTable[pageAddress].frameNo].dirtyBit = 1;
 				frameTable[process[fakePid].pageTable[pageAddress].frameNo].referenceBit |= (1<<7);
 				shifting++;
 				//printf("write shifting %d and %d\n",shifting, i);
 			} else {
+				generateLaunch(20000000);
+				generateInterval(1500000);
 				memoryAddress = createMemoryAddress(fakePid, pageAddress,randomizePageAddress);
 				fprintf(stderr,"Master: P%d is requesting read of the address %d at time %d:%d\n",fakePid, memoryAddress,shmPtr->clockInfo.seconds, shmPtr->clockInfo.nanoSeconds);
+				generateInterval(15000);
+				fprintf(stderr,"Master: P%d is updating dirtybit and referenceBit on frame %d\n",fakePid, process[fakePid].pageTable[pageAddress].frameNo);
 				frameTable[process[fakePid].pageTable[pageAddress].frameNo].referenceBit |= (1<<7);
 				shifting++;
 				//printf("read shifting %d and %d\n",shifting, i);
@@ -394,20 +491,26 @@ void inputPageToFrame(int isPresent, int fakePid, int pageAddress, char *operati
 				leastUsed = i;	
 			}
 		}
-		
+
 		if(isPresent == 1){
 			if(strcmp(operation, "WRITE") == 0){
-				generateInterval(15000000);
 				
-				
-
 				frameTable[leastUsed].occupied = 1;
 				frameTable[leastUsed].dirtyBit = 1;
+				fprintf(stderr,"Master: Dirty bit of frame %d set, adding additional time to the clock\n",leastUsed);
+				generateInterval(150000);
 				frameTable[leastUsed].referenceBit |= (1<<7);
 				frameTable[leastUsed].fakePid = fakePid;
 				frameTable[leastUsed].pageNo = pageAddress;
-				process[fakePid].pageTable[pageAddress].frameNo = i;
+				printf("\nleast used is %d\n", leastUsed);	
+				process[fakePid].pageTable[pageAddress].frameNo = leastUsed;
+				printf("frame address %d\n", process[fakePid].pageTable[pageAddress].frameNo);
 				process[frameTable[leastUsed].fakePid].pageTable[frameTable[leastUsed].pageNo].present = 0;
+
+				memoryAddress = createMemoryAddress(fakePid, pageAddress,randomizePageAddress);
+				generateLaunch(1500000);
+				generateInterval(1500000);
+				fprintf(stderr,"Master: P%d is requesting write of the address %d at time %d:%d\n",fakePid, memoryAddress,shmPtr->clockInfo.seconds, shmPtr->clockInfo.nanoSeconds);
 				shifting++;
 				//printf("write shifting %d and %d\n",shifting, i);
 			} else {
@@ -416,8 +519,13 @@ void inputPageToFrame(int isPresent, int fakePid, int pageAddress, char *operati
 				frameTable[leastUsed].fakePid = fakePid;
 				frameTable[leastUsed].referenceBit |= (1<<7);
 				frameTable[leastUsed].pageNo = pageAddress;	
+				process[fakePid].pageTable[pageAddress].frameNo = leastUsed;
 				process[frameTable[leastUsed].fakePid].pageTable[frameTable[leastUsed].pageNo].present = 0;
 				process[fakePid].pageTable[pageAddress].frameNo = i;
+				memoryAddress = createMemoryAddress(fakePid, pageAddress,randomizePageAddress);
+				generateLaunch(1500000);
+				generateInterval(1500000);
+				fprintf(stderr,"Master: P%d is requesting read of the address %d at time %d:%d\n",fakePid, memoryAddress,shmPtr->clockInfo.seconds, shmPtr->clockInfo.nanoSeconds);
 				shifting++;
 				//printf("read shifting %d and %d\n",shifting, i);
 			}	
@@ -427,12 +535,22 @@ void inputPageToFrame(int isPresent, int fakePid, int pageAddress, char *operati
 				frameTable[process[fakePid].pageTable[pageAddress].frameNo].dirtyBit = 1;
 				frameTable[process[fakePid].pageTable[pageAddress].frameNo].referenceBit |= (1<<7);
 				process[frameTable[leastUsed].fakePid].pageTable[frameTable[leastUsed].pageNo].present = 0;
+				memoryAddress = createMemoryAddress(fakePid, pageAddress,randomizePageAddress);
+				generateLaunch(1500000);
+				generateInterval(1500000);
+				fprintf(stderr,"Master: P%d is requesting write of the address %d at time %d:%d\n",fakePid, memoryAddress,shmPtr->clockInfo.seconds, shmPtr->clockInfo.nanoSeconds);
+			
 				shifting++;
 				//printf("write shifting %d and %d\n",shifting, i);
 			} else {
 				frameTable[process[fakePid].pageTable[pageAddress].frameNo].referenceBit |= (1<<7);
 				process[frameTable[leastUsed].fakePid].pageTable[frameTable[leastUsed].pageNo].present = 0;
-				shifting++;
+				memoryAddress = createMemoryAddress(fakePid, pageAddress,randomizePageAddress);
+				generateLaunch(1500000);
+				generateInterval(1500000);
+				fprintf(stderr,"Master: P%d is requesting write of the address %d at time %d:%d\n",fakePid, memoryAddress,shmPtr->clockInfo.seconds, shmPtr->clockInfo.nanoSeconds);
+			
+	shifting++;
 				//printf("read shifting %d and %d\n",shifting, i);
 			}
 		}
@@ -455,10 +573,11 @@ void inputPageToFrame(int isPresent, int fakePid, int pageAddress, char *operati
 
 //create memory address
 int createMemoryAddress(int fakePid, int pageAddress, int randomizePageAddress) {
-	
+	//fprintf(stderr,"\nfakePid %d, pageAddress: %d,randomize %d\n",fakePid, pageAddress, randomizePageAddress);	
 	int offSet = randomizePageAddress % 1024;
+	//fprintf(stderr,"\n%d\n",process[fakePid].pageTable[pageAddress].frameNo);
 	int memoryAddress1 = process[fakePid].pageTable[pageAddress].frameNo * 1024 + offSet;
-	//printf("process %d, pagetable %d, newAddress %d\n", fakePid, pageAddress, memoryAddress1);
+	//fprintf(stderr,"\nprocess %d, pagetable %d, newAddress %d\n", fakePid, pageAddress, memoryAddress1);
 	return memoryAddress1;
 
 }
